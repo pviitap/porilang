@@ -56,53 +56,61 @@ def push(item, stack: list) -> list:
 def pop(stack) -> list:
     return stack.pop()
 
-def parse_expression(tokens: list[Token], stack: list) -> tuple:
-    curtoken = tokens[0]
+def parse_expression(tokens: list[Token], stack: list) -> tuple[Token, list[Token]]:
+    curtoken, tokens_left = next_token(tokens)
     if curtoken.ttype != TType.NUMBER:
         raise ValueError("Expected: expression")
 
     push(curtoken.tvalue, stack)
-    tokens_left = tokens[1:]
-    return (tokens_left, stack)
+    return (curtoken, tokens_left)
 
-def parse_print_statement(tokens: list[Token], stack: list):
-    curtoken = tokens[0]
+def parse_print_statement(tokens: list[Token], stack: list) -> tuple[Token, list[Token]]:
+    curtoken, tokens_left = next_token(tokens)
     if curtoken.tvalue != TSYMBOL.san:
         raise ValueError("Expected: san")
 
-    tokens_left = tokens[1:]
-    tokens_left, stack = parse_expression(tokens_left, stack)
-
+    curtoken, tokens_left = parse_expression(tokens_left, stack)
     print("se o " + str(pop(stack)))
+    return (curtoken, tokens_left)
 
-    return tokens_left
+def parse_assignment(tokens: list[Token], stack: list) -> tuple[Token, list[Token]]:
+    raise ValueError("not impl")
+    curtoken, tokens_left = next_token(tokens)
+    return (curtoken, tokens_left)
 
-def parse_statement(tokens: list[Token], stack: list):
-    tokens_left = parse_print_statement(tokens, stack)
+def next_token(tokens: list[Token]) -> tuple[Token, list[Token]]:
+    curtoken = tokens[0]
+    tokens_left = tokens[1:]
+    return (curtoken, tokens_left)
 
-    curtoken = tokens_left[0]
+def parse_statement(tokens: list[Token], stack: list) -> tuple[Token, list[Token]]:
+
+    if tokens[0].tvalue == TSYMBOL.san:
+        curtoken, tokens_left = parse_print_statement(tokens, stack)
+    else:
+        curtoken, tokens_left = parse_assignment(tokens, stack)
+    
+    curtoken, tokens_left = next_token(tokens_left)
     if curtoken.tvalue != '\n':
         raise ValueError("Expected: end of line")
-
-    tokens_left = tokens_left[1:]
-
-    return tokens_left
+    return curtoken, tokens_left
 
 def parse_program(tokens: list[Token]):
     """
     parse the code
 
     <program> = <statement> [ <statement> ... ]
-    <statement> = <print_statement> "\n"
-    <print_statement> = "san" <expression>
-    <expression> = number
+    <statement> = (<print_statement> | <assignment>) "\n"
+    <print_statement> = "print" <expression>
+    <assignment> = identifier "=" <expression>
+    <expression> = number | identifier
     """
 
     stack : list = []
 
     if len(tokens)>1:
         while len(tokens)>0:
-            tokens = parse_statement(tokens, stack)
+            curtoken, tokens = parse_statement(tokens, stack)
         return True
     else:
         return False
