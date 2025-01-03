@@ -10,7 +10,7 @@ from pprint import pprint
 
 TYPE = Enum('TYPE', [('NUMBER', 1), ('SYMBOL', 2), ('OPERATOR', 3)])
 SYMBOL = Enum('SYMBOL', [('san', 1), ('o', 2)])
-OPERATOR = Enum('OPERATOR', [('+', 1), ('-', 2), ('*', 3), ('/', 4)])
+OPERATOR = Enum('OPERATOR', [('+', 'plus'), ('-', 'minus'), ('*', 'mult'), ('/', 'div')])
 
 class Token:
     value: int | SYMBOL | OPERATOR
@@ -31,7 +31,7 @@ def push_to_stack(item, stack: list) -> list:
     stack.append(item)
     return stack
 
-def pop_from_stack(stack) -> list:
+def pop_from_stack(stack) -> int:
     return stack.pop()
 
 
@@ -61,19 +61,37 @@ def tokenize(code : str) -> list:
             #raise ValueError('Could not parse ' + curtoken)
     return tokens
 
+
 def parse_expression(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
     """
-    <expression> = number | identifier
+    <expression> = <value> [ <operator> <expression> ]
+    <operator> = "+" | "-" | "*" | "/"
+    <value> = number | identifier
     """
+
     curtoken, tokens_left = next_token(tokens)
     if curtoken.type == TYPE.NUMBER:
         push_to_stack(curtoken.value, state.stack)
-    else: #todo check identifier type?
+    elif curtoken.type == None: #todo check identifier type?
         push_to_stack(state.identifiers[curtoken.value], state.stack)
+    #raise ValueError("Expected: expression but got " + str(curtoken))
 
-    #raise ValueError("Expected: expression but is " + str(curtoken))
+    if tokens_left[0].type == TYPE.OPERATOR:
+        curtoken, tokens_left = next_token(tokens_left)
+        operator = curtoken.value
+        curtoken, tokens_left = parse_expression(tokens_left, state)
+        if operator.value == 'plus':
+            result = pop_from_stack(state.stack) + pop_from_stack(state.stack)
+            push_to_stack(result, state.stack)
+        elif operator.value == 'minus':
+            v1 = pop_from_stack(state.stack)
+            v2 = pop_from_stack(state.stack)
+            result = v2 - v1
+            push_to_stack(result, state.stack)
+        else:
+            raise ValueError('unknown operator')
 
-    return (curtoken, tokens_left)
+    return curtoken, tokens_left
 
 def parse_print_statement(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
     """
@@ -103,34 +121,33 @@ def parse_assignment(tokens: list[Token], state: State) -> tuple[Token, list[Tok
 
     state.identifiers[identifier] = pop_from_stack(state.stack)
     
-    return (curtoken, tokens_left)
+    return curtoken, tokens_left
 
 def next_token(tokens: list[Token]) -> tuple[Token, list[Token]]:
     curtoken = tokens[0]
     tokens_left = tokens[1:]
-    return (curtoken, tokens_left)
+    return curtoken, tokens_left
 
 def parse_statement(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
+    """
+    <statement> = (<print_statement> | <assignment>) "\n"
+    """
 
     if tokens[0].value == SYMBOL.san:
         curtoken, tokens_left = parse_print_statement(tokens, state)
-    else:
+    elif tokens[1].value == SYMBOL.o:
         curtoken, tokens_left = parse_assignment(tokens, state)
+    else:
+        raise ValueError("Could not parse assignment")
     
     curtoken, tokens_left = next_token(tokens_left)
     if curtoken.value != '\n':
         raise ValueError("Expected: end of line")
     return curtoken, tokens_left
 
-def parse_program(tokens: list[Token]):
+def parse_program(tokens: list[Token]) -> bool:
     """
-    parse the code
-
     <program> = <statement> [ <statement> ... ]
-    <statement> = (<print_statement> | <assignment>) "\n"
-    <print_statement> = "print" <expression>
-    <assignment> = identifier "=" <expression>
-    <expression> = number | identifier
     """
 
     state: State = State([], {})
@@ -138,29 +155,20 @@ def parse_program(tokens: list[Token]):
     if len(tokens)>1:
         while len(tokens)>0:
             curtoken, tokens = parse_statement(tokens, state)
+        print("ei mittää")
         return True
     else:
+        print("hä?")
         return False
 
 if __name__ == '__main__':
 
-    """
     with open('test.pori','r',encoding='UTF-8') as f:
-        tokens = tokenize(f.read())
+        code = f.read()
 
-    tokens = tokenize('''a o 3
-                      san 1
-                      san 2
-                      san a
-                      san 4
-                      ''')
-    """
+    #parse_program(tokenize('''
+    #    a o 5 - 2
+    #    san a
+    #'''))
 
-    tokens = tokenize('''a o 3
-                      b o 1
-                      san b
-                      san a
-                      ''')
-
-    pprint(parse_program(tokens))
-    print("done")
+    parse_program(tokenize(code))
