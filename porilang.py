@@ -139,12 +139,10 @@ def parse_statement(tokens: list[Token], state: State) -> tuple[Token, list[Toke
         raise ValueError("Expected: end of line")
     return curtoken, tokens_left
 
-def parse_program(tokens: list[Token]) -> bool:
+def parse_program(tokens: list[Token], state: State) -> State:
     """
     <program> = <statement> [ <statement> ... ]
     """
-
-    state: State = State([], {})
 
     print("eläk sääki viä")
 
@@ -152,10 +150,10 @@ def parse_program(tokens: list[Token]) -> bool:
         while len(tokens)>0:
             curtoken, tokens = parse_statement(tokens, state)
         print("ei mittää")
-        return True
+        return state
 
     print("täh?")
-    return False
+    return state
 
 if __name__ == '__main__':
 
@@ -166,4 +164,6 @@ if __name__ == '__main__':
 
     with open('test.pori','r',encoding='UTF-8') as f:
         data = f.read()
-    parse_program(tokenize(data))
+
+    state: State = State([], {})
+    parse_program(tokenize(data), state)
