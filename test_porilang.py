@@ -7,7 +7,7 @@ def test_tokenizer():
     tokens = tokenize(code)
 
     assert  tokens[0].value == 'a'
-    assert  tokens[0].type == None
+    assert  tokens[0].type == TYPE.IDENTIFIER
 
 
     assert  tokens[1].value == 1

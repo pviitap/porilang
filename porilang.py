@@ -3,30 +3,25 @@ porilang
 
 """
 
+from dataclasses import dataclass
 from functools import reduce
 from enum import Enum
 from pprint import pprint
 
-TYPE = Enum('TYPE', ['NUMBER', 'SYMBOL', 'OPERATOR'])
+TYPE = Enum('TYPE', ['NUMBER', 'SYMBOL', 'OPERATOR', 'IDENTIFIER'])
 SYMBOL = Enum('SYMBOL', ['san', 'o'])
 OPERATOR = Enum('OPERATOR', [('+', 'add'), ('-', 'sub'), ('*', 'mult'), ('/', 'div')])
 
 
+@dataclass
 class Token:
-    value: int | SYMBOL | OPERATOR
+    value: int | str | SYMBOL | OPERATOR
     type: TYPE
-    def __init__(self, value, type):
-        self.value = value
-        self.type = type
-    def __repr__(self):
-        return "value: " + str(self.value) + ", type: " + str(self.type)
 
+@dataclass
 class State:
     stack: list
     identifiers: dict
-    def __init__(self, stack, identifiers):
-        self.identifiers = identifiers
-        self.stack = stack
 
 def push_to_stack(item, stack: list) -> list:
     stack.append(item)
@@ -58,7 +53,7 @@ def tokenize(code : str) -> list:
         elif curtoken in OPERATOR._member_names_:
             tokens.append(Token( OPERATOR[curtoken], TYPE['OPERATOR']))
         else:
-            tokens.append(Token( curtoken, None))
+            tokens.append(Token( curtoken, TYPE['IDENTIFIER']))
             #raise ValueError('Could not parse ' + curtoken)
     return tokens
 
@@ -73,7 +68,7 @@ def parse_expression(tokens: list[Token], state: State) -> tuple[Token, list[Tok
     curtoken, tokens_left = next_token(tokens)
     if curtoken.type == TYPE['NUMBER']:
         push_to_stack(curtoken.value, state.stack)
-    elif curtoken.type is None:
+    elif curtoken.type is TYPE['IDENTIFIER']:
         push_to_stack(state.identifiers[curtoken.value], state.stack)
     else:
         raise ValueError("Expected: <value> [ <operator> <expression> ] but got " + str(curtoken))
