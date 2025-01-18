@@ -1,36 +1,39 @@
 import pytest
-from porilang import tokenize, parse_program, Token, State, TYPE
+from porilang import Porilang, TYPE, SYMBOL
 
 def test_tokenizer():
 
-    code = 'a 1 2'
-    tokens = tokenize(code)
+    code = '''täsä o 1 + 2'''
 
-    assert  tokens[0].value == 'a'
+    porilang = Porilang()
+    tokens = list(porilang.tokenize(code))
+
+    assert  tokens[0].value == 'täsä'
     assert  tokens[0].type == TYPE.IDENTIFIER
 
-    assert  tokens[1].value == 1
-    assert  tokens[1].type == TYPE.NUMBER
+    assert  tokens[1].value == SYMBOL.o
+    assert  tokens[1].type == TYPE.SYMBOL
+
+    assert  tokens[2].value == 1
+    assert  tokens[2].type == TYPE.NUMBER
 
 def test_assign():
 
-    code = '''a o 5
-    b o 3
+    code = '''täsä o 5
+    tosa o 3
     '''
 
-    state: State = State([], {})
-    state = parse_program(tokenize(code), state)
+    porilang = Porilang()
+    porilang.run(code)
 
-    assert  state.identifiers['a'] == 5
-    assert  state.identifiers['b'] == 3
-
+    assert  porilang.identifiers['täsä'] == 5
+    assert  porilang.identifiers['tosa'] == 3
 
 def test_addition():
 
-    code = 'a o 1 + 2'
+    code = '''täsä o 1 + 2'''
 
-    state: State = State([], {})
-    state = parse_program(tokenize(code), state)
+    porilang = Porilang()
+    porilang.run(code)
 
-    assert  state.identifiers['a'] == 3
-
+    assert  porilang.identifiers['täsä'] == 3

@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from functools import reduce
 from enum import Enum
 from pprint import pprint
+from typing import Iterator
 
 TYPE = Enum('TYPE', ['NUMBER', 'SYMBOL', 'OPERATOR', 'IDENTIFIER'])
-SYMBOL = Enum('SYMBOL', ['san', 'o'])
+SYMBOL = Enum('SYMBOL', ['san', 'o', 'määrittel'])
 OPERATOR = Enum('OPERATOR', [('+', 'add'), ('-', 'sub'), ('*', 'mult'), ('/', 'div')])
 
 
@@ -18,152 +19,155 @@ class Token:
     value: int | str | SYMBOL | OPERATOR
     type: TYPE
 
-@dataclass
-class State:
+class Porilang:
+    code: str
+    curtoken: Token
+    tokens: Iterator[Token]
     stack: list
     identifiers: dict
+    line_nr: int
 
-def push_to_stack(item, stack: list) -> list:
-    stack.append(item)
-    return stack
+    def __init__(self):
+        self.line_nr = 0
+        self.stack = []
+        self.identifiers = {}
 
-def pop_from_stack(stack) -> int:
-    return stack.pop()
+    def next_token(self) -> Token:
+        self.curtoken = next(self.tokens)
+        return self.curtoken
 
+    def push_to_stack(self, item):
+        self.stack.append(item)
+    def pop_from_stack(self) -> int:
+        return self.stack.pop()
 
-def tokenize(code : str) -> list:
-    """
-    tokenize the code
+    def tokenize(self, code : str) -> Iterator[Token]:
+        """
+        tokenize the code
 
-    """
+        """
+        for line in code.splitlines():
+            line = line.strip()
+            for word in line.split():
+                if word.isnumeric():
+                    yield Token(int(word), TYPE['NUMBER'])
+                elif word in SYMBOL._member_names_:
+                    yield Token( SYMBOL[word], TYPE['SYMBOL'])
+                elif word in OPERATOR._member_names_:
+                    yield Token( OPERATOR[word], TYPE['OPERATOR'])
+                else:
+                    yield Token( word, TYPE['IDENTIFIER'])
+            yield Token('\n', TYPE['IDENTIFIER'])
+            self.line_nr += 1
 
-    list_of_words = [ line.strip().split() for line in
-             code.strip().split("\n")
-            if line != "" and not line.startswith("#") ]
-    words = reduce(lambda x, y: x + ['\n'] +  y, list_of_words) + ['\n']
-    length = len(words)
+    def parse_expression(self) -> bool:
+        """
+        <expression> = <value> [ <operator> <expression> ]
+        <operator> = "+" | "-" | "*" | "/"
+        <value> = number | identifier
+        """
 
-    tokens : list[Token] = []
-    for i in range(0,length):
-        curtoken = words[i]
-        if curtoken.isnumeric():
-            tokens.append(Token(int(curtoken), TYPE['NUMBER']))
-        elif curtoken in SYMBOL._member_names_:
-            tokens.append(Token( SYMBOL[curtoken], TYPE['SYMBOL']))
-        elif curtoken in OPERATOR._member_names_:
-            tokens.append(Token( OPERATOR[curtoken], TYPE['OPERATOR']))
+        if self.curtoken.type == TYPE['NUMBER']:
+            self.push_to_stack(self.curtoken.value)
+        elif self.curtoken.type is TYPE['IDENTIFIER']:
+            self.push_to_stack(self.identifiers[self.curtoken.value])
         else:
-            tokens.append(Token( curtoken, TYPE['IDENTIFIER']))
-            #raise ValueError('Could not parse ' + curtoken)
-    return tokens
+            raise ValueError("Expected: <value> [ <operator> <expression> ], got " + str(self.curtoken))
 
+        try:
+            self.next_token()
+            if self.curtoken.type == TYPE['OPERATOR']:
+                operator = self.curtoken.value
+                self.next_token()
+                self.parse_expression()
 
-def parse_expression(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
-    """
-    <expression> = <value> [ <operator> <expression> ]
-    <operator> = "+" | "-" | "*" | "/"
-    <value> = number | identifier
-    """
+                if operator == OPERATOR['+']:
+                    result = self.pop_from_stack() + self.pop_from_stack()
+                    self.push_to_stack(result)
+                elif operator == OPERATOR['-']:
+                    v1 = self.pop_from_stack()
+                    v2 = self.pop_from_stack()
+                    result = v2 - v1
+                    self.push_to_stack(result)
+                else:
+                    raise ValueError('unknown operator')
+        except StopIteration:
+            return True
+        return True
 
-    curtoken, tokens_left = next_token(tokens)
-    if curtoken.type == TYPE['NUMBER']:
-        push_to_stack(curtoken.value, state.stack)
-    elif curtoken.type is TYPE['IDENTIFIER']:
-        push_to_stack(state.identifiers[curtoken.value], state.stack)
-    else:
-        raise ValueError("Expected: <value> [ <operator> <expression> ] but got " + str(curtoken))
+    def parse_print_statement(self) -> bool:
+        """
+        <print_statement> = "san" <expression>
+        """
 
-    if tokens_left[0].type == TYPE['OPERATOR']:
-        curtoken, tokens_left = next_token(tokens_left)
-        operator = curtoken.value
-        curtoken, tokens_left = parse_expression(tokens_left, state)
-        if operator == OPERATOR['+']:
-            result = pop_from_stack(state.stack) + pop_from_stack(state.stack)
-            push_to_stack(result, state.stack)
-        elif operator == OPERATOR['-']:
-            v1 = pop_from_stack(state.stack)
-            v2 = pop_from_stack(state.stack)
-            result = v2 - v1
-            push_to_stack(result, state.stack)
+        self.next_token()
+
+        self.parse_expression()
+        print("se o " + str(self.pop_from_stack()))
+        return True
+
+    def parse_assignment(self) -> bool:
+        """
+        <assignment> = identifier "o" <expression>
+        """
+
+        identifier = self.curtoken.value
+
+        self.next_token()
+        if self.curtoken.value != SYMBOL['o']:
+            raise ValueError("Expected: o")
+
+        self.next_token()
+        self.parse_expression()
+        self.identifiers[identifier] = self.pop_from_stack()
+        return True
+
+    def parse_function_definition(self) -> bool:
+        """
+        <function> = "määrittel" \n [ <statement> ... ] "lakkaany" "\n"
+        """
+        raise ValueError("Not implemented")
+
+    def parse_statement(self) -> bool:
+        """
+        <statement> = (<print_statement> | <assignment>) "\n"
+        """
+
+        if self.curtoken.value == SYMBOL['san']:
+            self.parse_print_statement()
+        elif self.curtoken.value == SYMBOL['määrittel']:
+            self.parse_function_definition()
         else:
-            raise ValueError('unknown operator')
+            self.parse_assignment()
 
-    return curtoken, tokens_left
+        if self.curtoken.value != '\n':
+            raise ValueError("Expected: end of line, got " + str(self.curtoken))
+        return True
 
-def parse_print_statement(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
-    """
-    <print_statement> = "san" <expression>
-    """
-    curtoken, tokens_left = next_token(tokens)
-    if curtoken.value != SYMBOL['san']:
-        raise ValueError("Expected: san")
+    def parse_program(self) -> bool:
+        """
+        <program> = <statement> [ <statement> ... ]
+        """
 
-    curtoken, tokens_left = parse_expression(tokens_left, state)
-    print("se o " + str(pop_from_stack(state.stack)))
-    return curtoken, tokens_left
+        print("eläk sääki viä")
 
-def parse_assignment(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
-    """
-    <assignment> = identifier "o" <expression>
-    """
+        try:
+            while True:
+                self.next_token()
+                self.parse_statement()
+        except StopIteration:
+            print("noni")
+        return True
 
-    curtoken, tokens_left = next_token(tokens)
-    identifier = curtoken.value
-
-    curtoken, tokens_left = next_token(tokens_left)
-    if curtoken.value != SYMBOL['o']:
-        raise ValueError("Expected: o")
-    curtoken, tokens_left = parse_expression(tokens_left, state)
-    state.identifiers[identifier] = pop_from_stack(state.stack)
-    return curtoken, tokens_left
-
-def next_token(tokens: list[Token]) -> tuple[Token, list[Token]]:
-    curtoken = tokens[0]
-    tokens_left = tokens[1:]
-    return curtoken, tokens_left
-
-def parse_statement(tokens: list[Token], state: State) -> tuple[Token, list[Token]]:
-    """
-    <statement> = (<print_statement> | <assignment>) "\n"
-    """
-
-    if tokens[0].value == SYMBOL['san']:
-        curtoken, tokens_left = parse_print_statement(tokens, state)
-    elif tokens[1].value == SYMBOL['o']:
-        curtoken, tokens_left = parse_assignment(tokens, state)
-    else:
-        raise ValueError("Could not parse assignment")
-
-    curtoken, tokens_left = next_token(tokens_left)
-    if curtoken.value != '\n':
-        raise ValueError("Expected: end of line")
-    return curtoken, tokens_left
-
-def parse_program(tokens: list[Token], state: State) -> State:
-    """
-    <program> = <statement> [ <statement> ... ]
-    """
-
-    print("eläk sääki viä")
-
-    if len(tokens)>1:
-        while len(tokens)>0:
-            curtoken, tokens = parse_statement(tokens, state)
-        print("ei mittää")
-        return state
-
-    print("täh?")
-    return state
+    def run(self, code) -> bool:
+        self.tokens = self.tokenize(code)
+        self.parse_program()
+        return True
 
 if __name__ == '__main__':
-
-    #parse_program(tokenize('''
-    #    a o 5 - 2
-    #    san a
-    #'''))
 
     with open('test.pori','r',encoding='UTF-8') as f:
         data = f.read()
 
-    state: State = State([], {})
-    parse_program(tokenize(data), state)
+    porilang = Porilang()
+    porilang.run(data)
