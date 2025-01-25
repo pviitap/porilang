@@ -10,7 +10,7 @@ from pprint import pprint
 from typing import Iterator
 
 TYPE = Enum('TYPE', ['NUMBER', 'SYMBOL', 'OPERATOR', 'IDENTIFIER'])
-SYMBOL = Enum('SYMBOL', ['san', 'o', 'määrittel'])
+SYMBOL = Enum('SYMBOL', ['san', 'o', 'määrittel', 'loppu', 'tees'])
 OPERATOR = Enum('OPERATOR', [('+', 'add'), ('-', 'sub'), ('*', 'mult'), ('/', 'div')])
 
 
@@ -72,7 +72,7 @@ class Porilang:
         elif self.curtoken.type is TYPE['IDENTIFIER']:
             self.push_to_stack(self.identifiers[self.curtoken.value])
         else:
-            raise ValueError("Expected: <value> [ <operator> <expression> ], got " + str(self.curtoken))
+            raise ValueError("Odoti <value> [ <operator> <expression> ] mut tuli " + str(self.curtoken))
 
         try:
             self.next_token()
@@ -90,7 +90,7 @@ class Porilang:
                     result = v2 - v1
                     self.push_to_stack(result)
                 else:
-                    raise ValueError('unknown operator')
+                    raise ValueError('Mikä operaatori tää muka o ' + str(self.curtoken))
         except StopIteration:
             return True
         return True
@@ -115,7 +115,7 @@ class Porilang:
 
         self.next_token()
         if self.curtoken.value != SYMBOL['o']:
-            raise ValueError("Expected: o")
+            raise ValueError("Odoti 'o' mut tuli " + str(self.curtoken))
 
         self.next_token()
         self.parse_expression()
@@ -124,9 +124,29 @@ class Porilang:
 
     def parse_function_definition(self) -> bool:
         """
-        <function> = "määrittel" \n [ <statement> ... ] "lakkaany" "\n"
+        <function> = "määrittel" identifier \n [ <statement> ... ] "loppu" "\n"
         """
-        raise ValueError("Not implemented")
+        identifier = self.next_token().value
+        if self.next_token().value != '\n':
+            raise ValueError("Odoti uut rivii mut tuli " + str(self.curtoken))
+        function_tokens = []
+        while self.next_token().value != SYMBOL['loppu']:
+            function_tokens.append(self.curtoken)
+        self.identifiers[identifier] = function_tokens
+
+        self.next_token()
+        return True
+
+    def call_function(self) -> bool:
+
+        identifier = self.next_token().value
+        if identifier not in self.identifiers:
+            raise ValueError("Mikä tääki o olevinas " + str(identifier))
+
+        subfunction = Porilang()
+        subfunction.tokens = iter(self.identifiers[identifier])
+        subfunction.parse_program()
+        self.next_token()
 
     def parse_statement(self) -> bool:
         """
@@ -137,37 +157,38 @@ class Porilang:
             self.parse_print_statement()
         elif self.curtoken.value == SYMBOL['määrittel']:
             self.parse_function_definition()
+        elif self.curtoken.value == SYMBOL['tees']:
+            self.call_function()
         else:
             self.parse_assignment()
 
         if self.curtoken.value != '\n':
-            raise ValueError("Expected: end of line, got " + str(self.curtoken))
+            raise ValueError("Odoti uut rivii mut tuli " + str(self.curtoken))
         return True
 
     def parse_program(self) -> bool:
         """
         <program> = <statement> [ <statement> ... ]
         """
-
-        print("eläk sääki viä")
-
         try:
             while True:
                 self.next_token()
                 self.parse_statement()
         except StopIteration:
-            print("noni")
-        return True
+            return True
 
     def run(self, code) -> bool:
+        print("eläk sääki viä")
         self.tokens = self.tokenize(code)
         self.parse_program()
+        print("ei mittää")
         return True
 
 if __name__ == '__main__':
 
     with open('test.pori','r',encoding='UTF-8') as f:
         data = f.read()
+
 
     porilang = Porilang()
     porilang.run(data)
