@@ -37,3 +37,20 @@ def test_addition():
     porilang.run(code)
 
     assert  porilang.identifiers['täsä'] == 3
+
+def test_if():
+
+    code = '''jos 2 < 1 ni
+        tulos o 2
+    loppu
+    jos 1 < 2 ni
+        tulos o 1
+    loppu
+    jos 2 < 1 ni
+        tulos o 2
+    loppu'''
+
+    porilang = Porilang()
+    porilang.run(code)
+
+    assert  porilang.identifiers['tulos'] == 1

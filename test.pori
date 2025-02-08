@@ -4,3 +4,9 @@ loppu
 täsä o 4 + 5 + 3 - 1
 san täsä
 tees juttu
+jos 1 < 2 ni
+    san 1
+loppu
+jos 2 < 1 ni
+    san 2
+loppu

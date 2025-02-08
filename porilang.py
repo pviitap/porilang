@@ -10,8 +10,8 @@ from pprint import pprint
 from typing import Iterator
 
 TYPE = Enum('TYPE', ['NUMBER', 'SYMBOL', 'OPERATOR', 'IDENTIFIER'])
-SYMBOL = Enum('SYMBOL', ['san', 'o', 'määrittel', 'loppu', 'tees'])
-OPERATOR = Enum('OPERATOR', [('+', 'add'), ('-', 'sub'), ('*', 'mult'), ('/', 'div')])
+SYMBOL = Enum('SYMBOL', ['san', 'o', 'määrittel', 'loppu', 'tees', 'jos', 'ni'])
+OPERATOR = Enum('OPERATOR', [('+', 'add'), ('-', 'sub'), ('*', 'mult'), ('/', 'div'), ('<', 'lt'), ('>','gt')  ])
 
 
 @dataclass
@@ -63,7 +63,7 @@ class Porilang:
     def parse_expression(self) -> bool:
         """
         <expression> = <value> [ <operator> <expression> ]
-        <operator> = "+" | "-" | "*" | "/"
+        <operator> = "+" | "-" | "*" | "/" | "<" | ">"
         <value> = number | identifier
         """
 
@@ -72,7 +72,7 @@ class Porilang:
         elif self.curtoken.type is TYPE['IDENTIFIER']:
             self.push_to_stack(self.identifiers[self.curtoken.value])
         else:
-            raise ValueError("Odoti <value> [ <operator> <expression> ] mut tuli " + str(self.curtoken))
+            raise ValueError("odoti lauseket mut tuli " + str(self.curtoken))
 
         try:
             self.next_token()
@@ -82,15 +82,24 @@ class Porilang:
                 self.parse_expression()
 
                 if operator == OPERATOR['+']:
-                    result = self.pop_from_stack() + self.pop_from_stack()
-                    self.push_to_stack(result)
+                    v1 = self.pop_from_stack()
+                    v2 = self.pop_from_stack()
+                    result = v2 + v1
                 elif operator == OPERATOR['-']:
                     v1 = self.pop_from_stack()
                     v2 = self.pop_from_stack()
                     result = v2 - v1
-                    self.push_to_stack(result)
+                elif operator == OPERATOR['<']:
+                    v1 = self.pop_from_stack()
+                    v2 = self.pop_from_stack()
+                    result = v2 < v1
+                elif operator == OPERATOR['>']:
+                    v1 = self.pop_from_stack()
+                    v2 = self.pop_from_stack()
+                    result = v2 < v1
                 else:
-                    raise ValueError('Mikä operaatori tää muka o ' + str(self.curtoken))
+                    raise ValueError('mikä operaatio tää muka o ' + str(self.curtoken))
+                self.push_to_stack(result)
         except StopIteration:
             return True
         return True
@@ -115,7 +124,7 @@ class Porilang:
 
         self.next_token()
         if self.curtoken.value != SYMBOL['o']:
-            raise ValueError("Odoti 'o' mut tuli " + str(self.curtoken))
+            raise ValueError("odoti 'o' mut tuli " + str(self.curtoken))
 
         self.next_token()
         self.parse_expression()
@@ -128,7 +137,7 @@ class Porilang:
         """
         identifier = self.next_token().value
         if self.next_token().value != '\n':
-            raise ValueError("Odoti uut rivii mut tuli " + str(self.curtoken))
+            raise ValueError("odoti uut rivii mut tuli " + str(self.curtoken))
         function_tokens = []
         while self.next_token().value != SYMBOL['loppu']:
             function_tokens.append(self.curtoken)
@@ -137,20 +146,59 @@ class Porilang:
         self.next_token()
         return True
 
+    def parse_if(self) -> bool:
+        """
+        "jos" <expression> "ni" "\n" [<statement>] "loppu"
+        """
+        if self.curtoken.value != SYMBOL['jos']:
+            raise ValueError("odoti 'jos' mut tuli " + str(self.curtoken))
+
+        self.next_token()
+
+        self.parse_expression()
+        result = self.stack.pop()
+
+        if self.curtoken.value != SYMBOL['ni']:
+            raise ValueError("odoti 'ni' mut tuli " + str(self.curtoken))
+        self.next_token()
+
+        if self.curtoken.value != '\n':
+            raise ValueError("odoti uut rivii mut tuli " + str(self.curtoken))
+
+        self.next_token()
+
+        if result:
+            while self.curtoken.value != SYMBOL['loppu']:
+                self.parse_statement()
+                self.next_token()
+        else:
+            while True:
+                if self.next_token().value == SYMBOL['loppu']:
+                    break
+
+        self.next_token()
+        return True
+
+
     def call_function(self) -> bool:
+        """
+        "tees" identifier "\n"
+        """
 
         identifier = self.next_token().value
         if identifier not in self.identifiers:
-            raise ValueError("Mikä tääki o olevinas " + str(identifier))
+            raise ValueError('mikä tääki ' + str(identifier) + ' o')
 
         subfunction = Porilang()
         subfunction.tokens = iter(self.identifiers[identifier])
         subfunction.parse_program()
         self.next_token()
 
+        return True
+
     def parse_statement(self) -> bool:
         """
-        <statement> = (<print_statement> | <assignment>) "\n"
+        <statement> = (<print_statement> | <function_definition> | <call_function> | <if> <assignment>) "\n"
         """
 
         if self.curtoken.value == SYMBOL['san']:
@@ -159,11 +207,13 @@ class Porilang:
             self.parse_function_definition()
         elif self.curtoken.value == SYMBOL['tees']:
             self.call_function()
+        elif self.curtoken.value == SYMBOL['jos']:
+            self.parse_if()
         else:
             self.parse_assignment()
 
         if self.curtoken.value != '\n':
-            raise ValueError("Odoti uut rivii mut tuli " + str(self.curtoken))
+            raise ValueError("odoti uut rivii mut tuli " + str(self.curtoken))
         return True
 
     def parse_program(self) -> bool:
